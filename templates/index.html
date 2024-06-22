@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Printer Progress</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #FFFFFF;
+            font-family: Arial, sans-serif;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            padding: 20px;
+            margin-top: 60px;
+        }
+        .grid-item {
+            border: 1px solid #FFFFFF;
+            padding: 20px;
+            text-align: center;
+            background-color: #1E1E1E;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        .grid-item:nth-child(odd) {
+            background-color: #2E2E2E;
+        }
+        .grid-item p {
+            margin: 10px 0;
+            text-align: left;
+        }
+        .grid-item h3 {
+            margin: 10px 0;
+            color: #FF5722;
+        }
+        .grid-item a {
+            color: #FF5722;
+            text-decoration: none;
+        }
+        .grid-item a:hover {
+            text-decoration: underline;
+        }
+        .controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: #333333;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        .controls label {
+            color: #FFFFFF;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+        .controls input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            font-size: 14px;
+        }
+        .controls input[type="text"] {
+            width: 200px;
+            padding: 5px;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        .controls button {
+            padding: 5px 10px;
+            background-color: #FF5722;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .controls button:hover {
+            background-color: #E64A19;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #2E2E2E;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #FFFFFF;
+            position: relative;
+        }
+        .progress {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0;
+            transition: width 0.3s ease-in-out;
+        }
+        .progress-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #FFFFFF;
+        }
+        .delete-icon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            color: #FF5722;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="interval">Update (sec):</label>
+        <input type="number" id="interval" value="10" min="1" step="1">
+        <button id="setIntervalBtn">Set</button>
+        <label for="url">Add URL:</label>
+        <input type="text" id="url" placeholder="http://example.com">
+        <button id="addUrlBtn">Add</button>
+    </div>
+    <div class="grid-container" id="grid-container">
+    </div>
+
+    <script>
+        function fetchStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('grid-container');
+                    container.innerHTML = '';
+                    data.forEach(printer => {
+                        const item = document.createElement('div');
+                        item.className = 'grid-item';
+                        item.innerHTML = `
+                            <span class="delete-icon" onclick="deletePrinter('${printer.url}')">&times;</span>
+                            <h3><a href="${printer.url}" target="_blank">Printer ${printer.id}</a></h3>
+                            <p>${printer.status}</p>
+                            ${printer.progress !== 'false' ? `
+                                <p>${printer.filename}</p>
+                                <div class="progress-bar">
+                                    <div class="progress" style="width: ${printer.progress}%;"></div>
+                                    <span class="progress-label">${printer.progress}%</span>
+                                </div>
+                                <p>Heater Bed: ${printer.heater_bed} °C</p>
+                                <p>Extruder: ${printer.extruder} °C</p>
+                            ` : ''}
+                        `;
+                        container.appendChild(item);
+                    });
+                })
+                .catch(error => console.error('Error fetching status:', error));
+        }
+
+        function deletePrinter(url) {
+            fetch('/delete_url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: url })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message);
+                fetchStatus();
+            })
+            .catch(error => console.error('Error deleting URL:', error));
+        }
+        fetchStatus();
+
+        // Interval
+        document.getElementById('setIntervalBtn').addEventListener('click', () => {
+            const interval = document.getElementById('interval').value;
+            clearInterval(refreshIntervalId);
+            fetch('/set_interval', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ interval: interval })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message);
+                refreshIntervalId = setInterval(fetchStatus, interval * 1000); // 10sec
+            })
+            .catch(error => console.error('Error setting interval:', error));
+        });
+
+        document.getElementById('addUrlBtn').addEventListener('click', () => {
+            const url = document.getElementById('url').value;
+            fetch('/add_url', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url: url })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message);
+                fetchStatus();
+            })
+            .catch(error => console.error('Error adding URL:', error));
+        });
+        let refreshIntervalId = setInterval(fetchStatus, 10000);  // 10sec
+    </script>
+</body>
+</html>
