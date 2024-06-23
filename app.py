@@ -33,7 +33,8 @@ def get_print_progress(api_url):
           status['print_stats']['state'] == 'complete' or
           status['print_stats']['state'] == 'standby'):
         return '🟢Printer is ' + status['print_stats']['state'], 'false', ''
-    elif status['print_stats']['state'] == 'paused':
+    elif (status['print_stats']['state'] == 'paused' or
+          status['print_stats']['state'] == 'cancelled'):
         return '🟡Printer is ' + status['print_stats']['state'], 'false', ''
     elif (status['print_stats']['state'] == 'error' or
           status['print_stats']['state'] == 'shutdown'):
